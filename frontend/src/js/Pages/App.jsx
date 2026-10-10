@@ -16349,8 +16349,15 @@ function Profile(){
     const handlePhotoSelect=(e)=>{
         const file=e.target.files?.[0];
         if(!file) return;
+        if(!['image/jpeg','image/png','image/gif'].includes(file.type)){
+            e.target.value='';
+            setMessage('Please choose a JPG, PNG, or GIF image.');
+            setMessageType('error');
+            return;
+        }
         if(file.size>2*1024*1024){
-            setMessage('Photo must be under 2MB.');
+            e.target.value='';
+            setMessage('Photo must be 2MB or smaller.');
             setMessageType('error');
             return;
         }
@@ -16358,6 +16365,12 @@ function Profile(){
         setPhotoRemoved(false);
         const reader=new FileReader();
         reader.onload=(ev)=>setPhotoPreview(ev.target.result);
+        reader.onerror=()=>{
+            setPhotoFile(null);
+            setPhotoPreview(null);
+            setMessage('Could not preview this photo. Please choose another image.');
+            setMessageType('error');
+        };
         reader.readAsDataURL(file);
     };
 
@@ -16441,7 +16454,8 @@ function Profile(){
             setPhotoRemoved(false);
             if(fileRef.current)fileRef.current.value='';
         }catch(e){
-            setMessage(e.response?.data?.message||'Could not update profile. Please check your input and try again.');
+            const validationMessage=Object.values(e.response?.data?.errors||{}).flat()[0];
+            setMessage(validationMessage||e.response?.data?.message||'Could not update profile. Please check your input and try again.');
             setMessageType('error');
         }finally{
             setSaving(false);
@@ -16852,7 +16866,7 @@ function Profile(){
                                     <input
                                         ref={fileRef}
                                         type="file"
-                                        accept="image/*"
+                                        accept=".jpg,.jpeg,.png,.gif,image/jpeg,image/png,image/gif"
                                         className="hidden"
                                         onChange={handlePhotoSelect}
                                     />

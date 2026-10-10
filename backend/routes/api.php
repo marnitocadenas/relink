@@ -15,6 +15,7 @@ Route::post('register', [AuthController::class, 'register']);
 Route::post('register/check-availability', [AuthController::class, 'checkRegistrationAvailability'])
     ->middleware('throttle:30,1');
 Route::post('login', [AuthController::class, 'login']);
+Route::get('profile-photo', [AuthController::class, 'profilePhoto'])->name('profile-photo');
 
 // OTP Password Reset Routes
 Route::post('forgot-password/send-otp', [AuthController::class, 'sendOtp']);

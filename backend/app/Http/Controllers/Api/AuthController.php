@@ -324,6 +324,19 @@ class AuthController extends Controller
         return new UserResource($r->user());
     }
 
+    public function profilePhoto(Request $r)
+    {
+        $path = (string) $r->query('path', '');
+        if (!str_starts_with($path, 'profiles/') || str_contains($path, '..')) {
+            abort(404);
+        }
+
+        $disk = \Illuminate\Support\Facades\Storage::disk('public');
+        abort_unless($disk->exists($path), 404);
+
+        return $disk->response($path, null, ['Cache-Control' => 'public, max-age=86400']);
+    }
+
     public function updateProfile(Request $r)
     {
         $u = $r->user();
@@ -394,7 +407,7 @@ class AuthController extends Controller
             'last_name' => 'nullable|string|max:100',
             'email' => 'required|email|unique:users,email,' . $u->id,
             'password' => 'nullable|min:8|confirmed',
-            'profile_photo' => 'nullable|image|max:2048',
+            'profile_photo' => 'nullable|image|mimes:jpg,jpeg,png,gif|max:2048',
             'remove_photo' => 'nullable|boolean',
             'campus_id' => ['nullable', 'string', 'max:50', 'unique:users,campus_id,' . $u->id],
             'valid_id_number' => ['nullable', 'string', 'max:50', 'unique:users,valid_id_number,' . $u->id],
@@ -444,8 +457,19 @@ class AuthController extends Controller
 
         $data = $r->validate($rules);
 
+        $oldProfilePhotoPath = $u->profile_photo_path;
+        $newProfilePhotoPath = null;
         if ($r->hasFile('profile_photo')) {
-            $data['profile_photo_path'] = $r->file('profile_photo')->store('profiles', 'public');
+            try {
+                $newProfilePhotoPath = $r->file('profile_photo')->store('profiles', 'public');
+            } catch (\Throwable $e) {
+                report($e);
+                return response()->json(['message' => 'Could not store the profile photo. Please try again.'], 500);
+            }
+            if (!$newProfilePhotoPath) {
+                return response()->json(['message' => 'Could not store the profile photo. Please try again.'], 500);
+            }
+            $data['profile_photo_path'] = $newProfilePhotoPath;
         } elseif ($r->boolean('remove_photo')) {
             $data['profile_photo_path'] = null;
         }
@@ -457,7 +481,17 @@ class AuthController extends Controller
         }
 
         unset($data['profile_photo'], $data['remove_photo']);
-        $u->update($data);
+        try {
+            $u->update($data);
+        } catch (\Throwable $e) {
+            if ($newProfilePhotoPath) {
+                \Illuminate\Support\Facades\Storage::disk('public')->delete($newProfilePhotoPath);
+            }
+            throw $e;
+        }
+        if (($newProfilePhotoPath || $r->boolean('remove_photo')) && $oldProfilePhotoPath && $oldProfilePhotoPath !== $newProfilePhotoPath) {
+            \Illuminate\Support\Facades\Storage::disk('public')->delete($oldProfilePhotoPath);
+        }
         if (isset($data['password'])) $u->tokens()->where('id', '!=', $u->currentAccessToken()?->id)->delete();
         return new UserResource($u->fresh());
     }
