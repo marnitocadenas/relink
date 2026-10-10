@@ -88,7 +88,6 @@ class AdminAddMemberComprehensiveTest extends TestCase
             'last_name' => 'Castillo',
             'campus_id' => 'ADM-2026-001',
             'email' => 'eleanor.castillo@tmc.edu.ph',
-            'department' => 'Office of the Campus Chancellor',
             'contact_number' => '+639171112233',
             'password' => $password,
             'password_confirmation' => $password,
@@ -105,14 +104,14 @@ class AdminAddMemberComprehensiveTest extends TestCase
             ->assertJsonPath('data.account_type', 'admin')
             ->assertJsonPath('data.campus_id', 'ADM-2026-001')
             ->assertJsonPath('data.email', 'eleanor.castillo@tmc.edu.ph')
-            ->assertJsonPath('data.department', 'Office of the Campus Chancellor')
+            ->assertJsonPath('data.department', null)
             ->assertJsonPath('data.contact_number', '+639171112233');
 
         $this->assertDatabaseHas('users', [
             'email' => 'eleanor.castillo@tmc.edu.ph',
             'role' => 'admin',
             'campus_id' => 'ADM-2026-001',
-            'department' => 'Office of the Campus Chancellor',
+            'department' => null,
             'student_id_number' => null,
             'address_line_1' => null,
             'valid_id_type' => null,
@@ -166,6 +165,53 @@ class AdminAddMemberComprehensiveTest extends TestCase
             'student_id_number' => null,
             'address_line_1' => null,
         ]);
+    }
+
+    public function test_staff_department_options_and_custom_department_are_saved_and_listed(): void
+    {
+        $admin = User::factory()->create(['role' => 'admin']);
+        Sanctum::actingAs($admin);
+
+        $departments = [
+            'Student Affairs and Services Office',
+            "Registrar's Office",
+            'Guidance and Counselling / School Clinic',
+            'Supreme Student Council (SSC) & Campus Organizations',
+            'Supreme Student Council (SSC) / Academic Colleges (COAD, COEd, Criminology, IT, Arts & Sciences)',
+            'Management Information Systems (MIS) / IT Department',
+            'Custom Student Support Office',
+        ];
+
+        foreach ($departments as $index => $department) {
+            $email = "staff.department.{$index}@tmc.edu.ph";
+            $campusId = 'STF-DEPT-' . str_pad((string) $index, 3, '0', STR_PAD_LEFT);
+            $response = $this->postJson('/api/admin/users', [
+                'role' => 'staff',
+                'account_type' => 'staff',
+                'first_name' => 'Department',
+                'last_name' => 'Test' . $index,
+                'campus_id' => $campusId,
+                'email' => $email,
+                'department' => $department,
+                'contact_number' => '+63917' . str_pad((string) $index, 7, '0', STR_PAD_LEFT),
+                'password' => 'Secure!Pass2026',
+                'password_confirmation' => 'Secure!Pass2026',
+            ]);
+
+            $response->assertCreated()->assertJsonPath('data.department', $department);
+            $this->assertDatabaseHas('users', [
+                'email' => $email,
+                'campus_id' => $campusId,
+                'department' => $department,
+            ]);
+        }
+
+        $listedDepartments = collect($this->getJson('/api/admin/users')->assertOk()->json('data'))
+            ->pluck('department')
+            ->all();
+        foreach ($departments as $department) {
+            $this->assertContains($department, $listedDepartments);
+        }
     }
 
     /**

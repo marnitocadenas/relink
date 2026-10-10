@@ -60,6 +60,15 @@ const labels = {
     users: 'Members & Accounts',
 };
 
+const STAFF_DEPARTMENTS = [
+    'Student Affairs and Services Office',
+    "Registrar's Office",
+    'Guidance and Counselling / School Clinic',
+    'Supreme Student Council (SSC) & Campus Organizations',
+    'Supreme Student Council (SSC) / Academic Colleges (COAD, COEd, Criminology, IT, Arts & Sciences)',
+    'Management Information Systems (MIS) / IT Department',
+];
+
 function DropdownSelect({ children, className = '', menuClassName = '', menuWidth, menuAlign = 'left', value, defaultValue = '', onChange, id, name, form, required, disabled, ...buttonProps }) {
     const generatedId = useId();
     const selectId = id || `dropdown-${generatedId}`;
@@ -5000,6 +5009,9 @@ function ResourceForm({ donation }) {
 
 function EditModal({item, kind, admin, close, done}){
     const isUserKind = kind === 'users';
+    const [staffDepartmentChoice, setStaffDepartmentChoice] = useState(() => (
+        STAFF_DEPARTMENTS.includes(item.department) ? item.department : item.department ? 'Others' : ''
+    ));
     const [f, setF] = useState({
         ...item,
         first_name: item.first_name || (item.name ? item.name.split(' ')[0] : ''),
@@ -5166,6 +5178,9 @@ function EditModal({item, kind, admin, close, done}){
 
     const handleRoleChange = (newRole) => {
         setError('');
+        setStaffDepartmentChoice(newRole === 'staff'
+            ? (STAFF_DEPARTMENTS.includes(f.department) ? f.department : f.department ? 'Others' : '')
+            : '');
         setAdminUniqueness({
             student_id_number: { status: 'idle', message: '', checkedValue: '' },
             email: { status: 'idle', message: '', checkedValue: '' },
@@ -5304,14 +5319,14 @@ function EditModal({item, kind, admin, close, done}){
 
             if (f.role === 'admin' || f.role === 'staff') {
                 if (!f.campus_id?.trim()) {
-                    setError((f.role === 'admin' ? 'Administrator ID / Campus ID Number' : 'Staff ID / Campus ID Number') + ' is required.');
+                    setError((f.role === 'admin' ? 'Campus ID Number' : 'Staff ID / Campus ID Number') + ' is required.');
                     return;
                 }
-                if (!f.email?.trim()) {
-                    setError('TMC Email Address is required.');
+                if (!f.email?.trim() || !EMAIL_REGEX_MODAL.test(f.email.trim()) || f.email.trim().includes('..')) {
+                    setError(f.email?.trim() ? 'Please enter a valid email address.' : 'Email Address is required.');
                     return;
                 }
-                if (!f.department?.trim()) {
+                if (f.role === 'staff' && !f.department?.trim()) {
                     setError('Department / Office is required.');
                     return;
                 }
@@ -5422,7 +5437,7 @@ function EditModal({item, kind, admin, close, done}){
 
             if (f.role === 'admin' || f.role === 'staff') {
                 payload.campus_id = f.campus_id?.trim() || '';
-                payload.department = f.department?.trim() || '';
+                if (f.role === 'staff') payload.department = f.department?.trim() || '';
             } else if (f.role === 'beneficiary') {
                 payload.student_id_number = f.student_id_number?.trim() || '';
                 payload.school_email = f.email?.trim() || '';
@@ -5541,19 +5556,19 @@ function EditModal({item, kind, admin, close, done}){
                             ROLE SPECIFIC FIELDS ACCORDING TO RANKINGS
                         ========================================================================= */}
 
-                        {/* ADMINISTRATOR & STAFF: Rank #5 Campus ID, Rank #6 TMC Email, Rank #7 Dept, Rank #8 Contact */}
+                        {/* ADMINISTRATOR & STAFF: Rank #5 Campus ID, Rank #6 Email, Staff Department, Contact */}
                         {(f.role === 'admin' || f.role === 'staff') && (
                             <>
                                 <div>
                                     <label htmlFor="modal_campus_id" className="block text-xs font-bold text-[#2563EB] uppercase tracking-wider mb-1">
-                                        {f.role === 'admin' ? 'Administrator ID / Campus ID Number' : 'Staff ID / Campus ID Number'}
+                                        Campus ID Number
                                     </label>
                                     <input
                                         id="modal_campus_id"
                                         type="text"
                                         required
                                         className="field w-full text-xs font-semibold"
-                                        placeholder={f.role === 'admin' ? 'e.g. ADM-2026-001' : 'e.g. STF-2026-001'}
+                                        placeholder="Enter campus ID number"
                                         value={f.campus_id || ''}
                                         onChange={e => setF({...f, campus_id: e.target.value})}
                                         maxLength={50}
@@ -5561,33 +5576,50 @@ function EditModal({item, kind, admin, close, done}){
                                 </div>
                                 <div>
                                     <label htmlFor="modal_admin_email" className="block text-xs font-bold text-[#2563EB] uppercase tracking-wider mb-1">
-                                        TMC Email Address
+                                        Email Address
                                     </label>
                                     <input
                                         id="modal_admin_email"
                                         required
                                         type="email"
                                         className="field w-full text-xs font-semibold"
-                                        placeholder="e.g. user@tmc.edu.ph"
+                                        placeholder="Enter email address"
                                         value={f.email || ''}
                                         onChange={e => setF({...f, email: e.target.value})}
                                     />
                                 </div>
-                                <div>
+                                {f.role === 'staff' && <div>
                                     <label htmlFor="modal_admin_dept" className="block text-xs font-bold text-[#2563EB] uppercase tracking-wider mb-1">
                                         Department / Office
                                     </label>
-                                    <input
-                                        id="modal_admin_dept"
-                                        type="text"
-                                        required
-                                        className="field w-full text-xs font-semibold"
-                                        placeholder="e.g. Office of Student Affairs / Administration"
-                                        value={f.department || ''}
-                                        onChange={e => setF({...f, department: e.target.value})}
-                                        maxLength={255}
-                                    />
-                                </div>
+                                    <div className="space-y-2">
+                                        <DropdownSelect
+                                            id="modal_admin_dept"
+                                            required
+                                            className="field w-full text-xs font-semibold"
+                                            value={staffDepartmentChoice}
+                                            onChange={e => {
+                                                const choice = e.target.value;
+                                                setStaffDepartmentChoice(choice);
+                                                setF(prev => ({...prev, department: choice === 'Others' ? '' : choice}));
+                                            }}
+                                        >
+                                            <option value="" disabled hidden>Select department / office</option>
+                                            {STAFF_DEPARTMENTS.map(department => <option key={department} value={department}>{department}</option>)}
+                                            <option value="Others">Others</option>
+                                        </DropdownSelect>
+                                        {staffDepartmentChoice === 'Others' && <input
+                                            id="modal_admin_dept_custom"
+                                            type="text"
+                                            required
+                                            className="field w-full text-xs font-semibold"
+                                            placeholder="Enter department / office"
+                                            value={f.department || ''}
+                                            onChange={e => setF(prev => ({...prev, department: e.target.value}))}
+                                            maxLength={255}
+                                        />}
+                                    </div>
+                                </div>}
                                 <div>
                                     <label htmlFor="modal_admin_contact" className="block text-xs font-bold text-[#2563EB] uppercase tracking-wider mb-1">
                                         Contact Number
@@ -5655,10 +5687,10 @@ function EditModal({item, kind, admin, close, done}){
                                         {sidFormatValid && renderAdminDuplicateStatus('student_id_number')}
                                     </div>
 
-                                    {/* Rank #6: School Email Address */}
+                                    {/* Rank #6: Email Address */}
                                     <div>
                                         <label htmlFor="modal_ben_email" className="block text-xs font-bold text-[#2563EB] uppercase tracking-wider mb-1">
-                                            School Email Address
+                                            Email Address
                                         </label>
                                         <input
                                             id="modal_ben_email"
@@ -5671,7 +5703,7 @@ function EditModal({item, kind, admin, close, done}){
                                                         ? 'border-[#22C55E] focus:border-[#22C55E]'
                                                         : ''
                                             }`}
-                                            placeholder="e.g. student@tmc.edu.ph"
+                                            placeholder="Enter email address"
                                             value={f.email || ''}
                                             onChange={e => setF({...f, email: e.target.value})}
                                             maxLength={255}
@@ -5834,7 +5866,7 @@ function EditModal({item, kind, admin, close, done}){
                                 </div>
                                 <div>
                                     <label htmlFor="modal_donor_addr1" className="block text-xs font-bold text-[#2563EB] uppercase tracking-wider mb-1">
-                                        Address Line 1
+                                        Address Line
                                     </label>
                                     <input
                                         id="modal_donor_addr1"

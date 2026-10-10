@@ -179,7 +179,7 @@ class AdminController extends Controller
         if ($isAdminOrStaff) {
             $rules['campus_id'] = 'required|string|max:50|unique:users,campus_id';
             $rules['email'] = 'required|email|max:255|unique:users,email';
-            $rules['department'] = 'required|string|max:255';
+            $rules['department'] = $isAdmin ? 'nullable|string|max:255' : 'required|string|max:255';
             $rules['contact_number'] = 'required|string|max:30|unique:users,contact_number';
         } elseif ($isBeneficiary) {
             $rules['student_id_number'] = ['required', 'string', 'max:9', 'regex:/^\d{2}-\d{6}$/', 'unique:users,student_id_number'];
